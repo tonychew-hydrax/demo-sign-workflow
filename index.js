@@ -41,7 +41,7 @@ var mnemonic1 = "cabin version vessel crash eye hero left pool frown stable upho
 // generate signed
 
 
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   res.send('Hello World!')
 })
 
@@ -72,7 +72,7 @@ app.get('/wallet/new', async (req, res) => {
     return res.json({data, contract});
 })
 
-app.get('/unsigned', (req, res) => {
+app.get('/unsigned', async (req, res) => {
 // app.post('/unsigned', (req, res) => {
     let safeAddress = req.query.safeAddress;
     let amount = req.query.amount;
@@ -86,10 +86,14 @@ app.get('/unsigned', (req, res) => {
     data.amount = amount;
     data.destinationAddress = destinationAddress;
 
-    return res.json(data);
+    let amountParsed = ethers.utils.parseEther(amount, 'ether')
+    
+    let unsignedTxData = await genMultisigUnsignTx(provider, safeAddress, destinationAddress, amountParsed, "", "");
+
+    return res.json({data, unsignedTxData});
 })
 
-app.get('/sign_broadcast', (req, res) => {
+app.get('/sign_broadcast', async (req, res) => {
 // app.post('/sign_broadcast', (req, res) => {
     let safeAddress = req.query.safeAddress;
     let signedData = req.query.signedData;
@@ -199,4 +203,57 @@ async function genContractAddress(addressArray, keyArray, threshold) {
   console.log(`https://app.safe.global/gor:${safeAddress}`)
 
   return safeAddress
+}
+
+async function genMultisigUnsignTx(provider, sourceAddress, destinationAddress, amount, nonceProvided, gasPriceProvided, gasLimit = 250000) {
+    let gasPrice;
+    let nonce;
+
+    let safeAddress = sourceAddress;
+
+    const ethAdapterProvider = new EthersAdapter({
+        ethers,
+        signerOrProvider: provider //provider //privateKey1
+    })
+    console.log("ethAdapterProvider ", ethAdapterProvider)
+
+    if (gasPriceProvided !== "") {
+        gasPrice = gasPriceProvided
+    } else {
+        gasPrice = await provider.getFeeData()
+    }
+    console.log('gasPrice ', gasPrice)
+
+    if (nonceProvided !== "") {
+        nonce = nonceProvided
+    } else {
+        nonce = await provider.getTransactionCount(sourceAddress, "latest");
+    }
+    console.log('nonce ', nonce)
+    
+    let safeTransactionData = {
+        to: destinationAddress,
+        value: amount, //'<eth_value_in_wei>',
+        data: '0x'
+    }
+    // operation, // Optional
+    // safeTxGas, // Optional
+    // baseGas, // Optional
+    // gasPrice, // Optional
+    // gasToken, // Optional
+    // refundReceiver, // Optional
+    // nonce // Optional
+    
+    const Safe = SafeProtocol.default
+    const safeSdk = await Safe.create({ ethAdapter: ethAdapterProvider, safeAddress })
+    
+    const safeTransaction = await safeSdk.createTransaction({ safeTransactionData })
+    console.log("safeTransaction ", safeTransaction)
+
+    const txHash = await safeSdk.getTransactionHash(safeTransaction)
+    console.log("txHash ", txHash)
+
+    let unsignTx = safeTransaction
+
+    return [unsignTx, {"txHash": txHash}]
 }
