@@ -31,8 +31,15 @@ const bip32 = BIP32Factory(ecc)
 
 const rootPath = "m/44'/60'/0'";
 
+// var { EthSignSignature, EthSafeTransaction } = require('@safe-global/protocol-kit')
+var EthSignSignature = require("@safe-global/protocol-kit/dist/src/utils/signatures/SafeSignature").default;
+var EthSafeTransaction = require("@safe-global/protocol-kit/dist/src/utils/transactions/SafeTransaction").default;
+
+
 // demo mnemonic. do not use with actual funds
 var mnemonic1 = "cabin version vessel crash eye hero left pool frown stable uphold prevent rude couch primary drum student heavy sail airport lens ball swap first"
+
+var mnemonic2 = "outer unusual this swamp endorse wrong sauce dash camp argue mention poem refuse goat engage flip second pyramid guess lounge sound gun craft noble"
 
 
 
@@ -96,13 +103,92 @@ app.get('/unsigned', async (req, res) => {
 app.get('/sign_broadcast', async (req, res) => {
 // app.post('/sign_broadcast', (req, res) => {
     let safeAddress = req.query.safeAddress;
+    let signerAddress = req.query.signerAddress;
     let signedData = req.query.signedData;
 
     let data = {};
     data.safeAddress = safeAddress;
+    data.signerAddress = signerAddress;
     data.signedData = signedData;
 
-    return res.json(data);
+    // let rawTx2 = `{"blockchain":"ethereum","network":"mainnet","timestamp":1697018602783,"signedTx":"{\"signatures\":[{\"signer\":\"xxx\",\"data\":\"xxx\"}],\"data\":{\"to\":\"0x073b965F98734DaDd401c33dc55EbD36d232AF58\",\"value\":{\"type\":\"BigNumber\",\"hex\":\"0x2386f26fc10000\"},\"data\":\"0x\",\"operation\":0,\"baseGas\":0,\"gasPrice\":0,\"gasToken\":\"0x0000000000000000000000000000000000000000\",\"refundReceiver\":\"0x0000000000000000000000000000000000000000\",\"nonce\":0,\"safeTxGas\":0}}"}`
+    // console.log('rawTx2 ', rawTx2)
+
+    let rawTx = `{"blockchain":"ethereum","network":"mainnet","timestamp":1697018602783,"signedTx":{"signatures":[{"signer":"${signerAddress}","data":"${signedData}"}],"data":{"to":"0x073b965F98734DaDd401c33dc55EbD36d232AF58","value":{"type":"BigNumber","hex":"0x2386f26fc10000"},"data":"0x","operation":0,"baseGas":0,"gasPrice":0,"gasToken":"0x0000000000000000000000000000000000000000","refundReceiver":"0x0000000000000000000000000000000000000000","nonce":0,"safeTxGas":0}}}`
+    console.log('rawTx ', rawTx)
+
+    let partiallySignedTxData = '';
+    let partiallySignedTx = '';
+    let partiallySignedTxSignature;
+    console.log('------')
+    
+    partiallySignedTxData = JSON.parse(rawTx);
+    console.log('partiallySignedTxData ', partiallySignedTxData)
+
+    console.log('------')
+    console.log('partiallySignedTxData["signedTx"] ', partiallySignedTxData["signedTx"])
+
+    partiallySignedTx = (partiallySignedTxData["signedTx"])
+    console.log('partiallySignedTx ', partiallySignedTx)
+
+    console.log('------')
+    console.log('------')
+    console.log('------')
+
+    console.log('partiallySignedTx ', partiallySignedTx)
+    
+
+    let privateKey1 = genDerivationPrivateKey(mnemonic1, rootPath, "0/0");
+    let privateKey2 = genDerivationPrivateKey(mnemonic2, rootPath, "0/0");
+    
+    const signer1 = new ethers.Wallet(privateKey1, provider);
+    const signer2 = new ethers.Wallet(privateKey2, provider);
+    
+    let fullySignedTx;
+    fullySignedTx = await genMultisigSignedTx(signer1, partiallySignedTx, safeAddress);
+
+    demoSignedTxWith2 = await genMultisigSignedTx(signer2, partiallySignedTx, safeAddress);
+
+    console.log('demoSignedTxWith2 ', demoSignedTxWith2)
+
+    console.log('------')
+    console.log('------')
+    console.log('------')
+
+    const safeTransactionToString = (safeTransaction) => {
+        return JSON.stringify({
+            signatures: [...safeTransaction.signatures.values()].map(s => ({signer: s.signer, data: s.data})),
+            data: safeTransaction.data,
+        })
+    }
+
+    const stringToSafeTransaction = (safeTransactionData) => {
+        const { signatures, data } = JSON.parse(safeTransactionData)
+        console.log('signatures ', signatures)
+        console.log('signatures[0] ', signatures[0])
+        console.log('data ', data)
+        
+        const t = new EthSafeTransaction(data)
+        for (const { signer, data } of signatures) {
+            console.log('signer ', signer)
+            console.log('data ', data)
+            let sig = new EthSignSignature(signer, data)
+            console.log('sig ', sig)
+            t.addSignature(new EthSignSignature(signer, data))
+        }
+        return t
+    }
+
+    let stringTx = safeTransactionToString(fullySignedTx)
+    console.log('stringTx ', stringTx)
+    let output = stringToSafeTransaction(stringTx)
+    console.log('output ', output)
+    
+    let tx;
+    tx = await broadcastSignedTx(signer1, output, safeAddress);
+    console.log('tx ', tx)
+
+    return res.json({data, stringTx, tx});
 })
 
 app.listen(port, () => {
@@ -256,4 +342,64 @@ async function genMultisigUnsignTx(provider, sourceAddress, destinationAddress, 
     let unsignTx = safeTransaction
 
     return [unsignTx, {"txHash": txHash}]
+}
+
+async function genMultisigSignedTx(signer, unsignTx, safeAddress) {
+    const ethAdapter = new EthersAdapter({
+        ethers,
+        signerOrProvider: signer //provider //privateKey1
+    })
+    console.log("ethAdapter ", ethAdapter)
+    console.log("signer ", signer)
+    
+    console.log("unsignTx.signatures ", unsignTx.signatures)
+
+    let Safe = SafeProtocol.default
+    let safeSdk = await Safe.create({ ethAdapter: ethAdapter, safeAddress })
+    console.log("safeSdk ", safeSdk)
+    console.log("unsignTx ", unsignTx)
+
+    const balance = await safeSdk.getBalance()
+    console.log("balance ", ethers.utils.formatEther(balance))
+
+    const nonce = await safeSdk.getNonce()
+    console.log("nonce ", nonce)
+    console.log("------------------")
+    console.log("------------------")
+
+    console.log("unsignTx ", unsignTx)
+
+    const signedSafeTransaction = await safeSdk.signTransaction(unsignTx)
+    console.log("signedSafeTransaction ", signedSafeTransaction)
+    console.log("signedSafeTransaction ", signedSafeTransaction.signatures)
+
+    const txHash = await safeSdk.getTransactionHash(signedSafeTransaction)
+    console.log("txHash ", txHash)
+
+    const ownerAddressesApprove = await safeSdk.getOwnersWhoApprovedTx(txHash)
+    console.log("ownerAddressesApprove ", ownerAddressesApprove)
+
+    let signedTx = signedSafeTransaction
+    console.log("signedTx ", signedTx)
+
+    return signedTx;
+}
+
+async function broadcastSignedTx(signer, signedTx, safeAddress) {
+    console.log('broadcastSignedTx');
+    console.log('signedTx ', signedTx);
+
+    const ethAdapter = new EthersAdapter({
+        ethers,
+        signerOrProvider: signer //provider //privateKey1
+    })
+
+    let Safe = SafeProtocol.default
+    let safeSdk = await Safe.create({ ethAdapter: ethAdapter, safeAddress })
+
+    let broadcastTx = await safeSdk.executeTransaction(signedTx)
+    await broadcastTx.transactionResponse?.wait()
+    console.log('broadcastTx ', broadcastTx);
+
+    return broadcastTx;
 }
