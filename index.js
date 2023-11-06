@@ -31,6 +31,10 @@ const bip32 = BIP32Factory(ecc)
 
 const rootPath = "m/44'/60'/0'";
 
+// demo mnemonic. do not use with actual funds
+var mnemonic1 = "cabin version vessel crash eye hero left pool frown stable uphold prevent rude couch primary drum student heavy sail airport lens ball swap first"
+
+
 
 // create wallet
 // generate unsigned
@@ -49,9 +53,6 @@ app.get('/wallet/new', async (req, res) => {
     let data = {};
     data.keys = keys;
     data.threshold = threshold;
-
-    // demo mnemonic. do not use with actual funds
-    var mnemonic1 = "cabin version vessel crash eye hero left pool frown stable uphold prevent rude couch primary drum student heavy sail airport lens ball swap first"
 
     let address1 = "0xa3c0318941267ec2C62A23aa711ebECC5D677263";
     let address2 = "0x1181f6E644B5FAe2748f6c674Fe3e7B8683Dc7De";
@@ -76,11 +77,26 @@ app.get('/unsigned', (req, res) => {
     let safeAddress = req.query.safeAddress;
     let amount = req.query.amount;
     let destinationAddress = req.query.destinationAddress;
+    console.log("destinationAddress", destinationAddress);
+    
+    destinationAddress = "0x073b965F98734DaDd401c33dc55EbD36d232AF58";
 
     let data = {};
     data.safeAddress = safeAddress;
     data.amount = amount;
     data.destinationAddress = destinationAddress;
+
+    return res.json(data);
+})
+
+app.get('/sign_broadcast', (req, res) => {
+// app.post('/sign_broadcast', (req, res) => {
+    let safeAddress = req.query.safeAddress;
+    let signedData = req.query.signedData;
+
+    let data = {};
+    data.safeAddress = safeAddress;
+    data.signedData = signedData;
 
     return res.json(data);
 })
