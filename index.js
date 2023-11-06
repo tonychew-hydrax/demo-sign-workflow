@@ -145,7 +145,9 @@ app.get('/sign_broadcast', async (req, res) => {
     const signer2 = new ethers.Wallet(privateKey2, provider);
     
     let fullySignedTx;
+    let demoSignedTxWith2;
     fullySignedTx = await genMultisigSignedTx(signer1, partiallySignedTx, safeAddress);
+    console.log('fullySignedTx ', fullySignedTx)
 
     demoSignedTxWith2 = await genMultisigSignedTx(signer2, partiallySignedTx, safeAddress);
 
