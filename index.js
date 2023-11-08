@@ -2,6 +2,9 @@ const express = require('express')
 const app = express()
 const port = 3001
 
+const helmet = require('helmet');
+var cors = require('cors')
+
 var bip39 = require('bip39')
 var crypto = require('crypto')
 var { ethers, JsonRpcProvider } = require('ethers')
@@ -23,6 +26,9 @@ var RPC_URL = "https://goerli.infura.io/v3/fa926a9d3c2a4067af17c4df5b3d6079"
 // const provider = new JsonRpcProvider(RPC_URL);
 const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
 console.log("provider ", provider);
+
+app.use(cors())
+app.use(helmet());
 
 const ecc = require('tiny-secp256k1')
 const { BIP32Factory } = require('bip32')
@@ -52,6 +58,24 @@ app.get('/', async (req, res) => {
   res.send('Hello World!')
 })
 
+app.get('/test', async (req, res) => {
+    let walletName = req.query.walletName;
+    let blockchain = req.query.blockchain;
+    let network = req.query.network;
+    let quorumM = req.query.quorumM;
+    let quorumN = req.query.quorumN;
+
+    let data = {};
+    data.walletName = walletName;
+    data.blockchain = blockchain;
+    data.network = network;
+    data.quorumM = quorumM;
+    data.quorumN = quorumN;
+
+    console.log("data", data);
+    return res.json(data);
+})
+
 app.get('/wallet/new', async (req, res) => {
 // app.post('/wallet', (req, res) => {
     let keys = req.query.keys;
@@ -74,6 +98,7 @@ app.get('/wallet/new', async (req, res) => {
         threshold
     )
 
+    console.log("data", data);
     console.log("contract", contract);
 
     return res.json({data, contract});
@@ -97,6 +122,8 @@ app.get('/unsigned', async (req, res) => {
     
     let unsignedTxData = await genMultisigUnsignTx(provider, safeAddress, destinationAddress, amountParsed, "", "");
 
+    console.log("data", data);
+    console.log("unsignedTxData", unsignedTxData);
     return res.json({data, unsignedTxData});
 })
 
@@ -189,6 +216,10 @@ app.get('/sign_broadcast', async (req, res) => {
     let tx;
     tx = await broadcastSignedTx(signer1, output, safeAddress);
     console.log('tx ', tx)
+
+    console.log("data", data);
+    console.log("stringTx", stringTx);
+    console.log("tx", tx);
 
     return res.json({data, stringTx, tx});
 })
